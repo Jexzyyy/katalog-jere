@@ -104,6 +104,9 @@ export async function tambahProduk(prevState, formData) {
   // Ambil data dari form
   const nama = formData.get("nama")?.trim();
   const hargaStr = formData.get("harga");
+  const hargaDiskonStr = formData.get("harga_diskon");
+  const stokStr = formData.get("stok");
+  const badge = formData.get("badge")?.trim();
   const kategori = formData.get("kategori")?.trim();
   const foto_url = formData.get("foto_url")?.trim();
   const deskripsi = formData.get("deskripsi")?.trim();
@@ -118,6 +121,28 @@ export async function tambahProduk(prevState, formData) {
     return { error: "Harga harus berupa angka 0 atau lebih." };
   }
 
+  const stok = parseInt(stokStr, 10);
+  if (isNaN(stok) || stok < 0) {
+    return { error: "Stok harus berupa angka 0 atau lebih." };
+  }
+
+  let harga_diskon = null;
+  if (hargaDiskonStr && hargaDiskonStr.trim() !== "") {
+    harga_diskon = parseInt(hargaDiskonStr, 10);
+    if (isNaN(harga_diskon) || harga_diskon <= 0) {
+      return { error: "Harga diskon harus berupa angka positif." };
+    }
+    if (harga_diskon >= harga) {
+      return { error: "Harga diskon harus lebih kecil dari harga normal." };
+    }
+  }
+
+  // Validasi badge
+  const validBadges = ["baru", "terlaris", ""];
+  if (badge && !validBadges.includes(badge)) {
+    return { error: "Badge tidak valid." };
+  }
+
   if (!kategori) {
     return { error: "Kategori harus diisi." };
   }
@@ -126,6 +151,9 @@ export async function tambahProduk(prevState, formData) {
   const { error } = await supabase.from("produk").insert({
     nama,
     harga,
+    harga_diskon,
+    stok,
+    badge: badge || null,
     kategori,
     foto_url: foto_url || null,
     deskripsi: deskripsi || null,
@@ -155,6 +183,9 @@ export async function ubahProduk(id, prevState, formData) {
   // Ambil data dari form
   const nama = formData.get("nama")?.trim();
   const hargaStr = formData.get("harga");
+  const hargaDiskonStr = formData.get("harga_diskon");
+  const stokStr = formData.get("stok");
+  const badge = formData.get("badge")?.trim();
   const kategori = formData.get("kategori")?.trim();
   const foto_url = formData.get("foto_url")?.trim();
   const deskripsi = formData.get("deskripsi")?.trim();
@@ -169,6 +200,28 @@ export async function ubahProduk(id, prevState, formData) {
     return { error: "Harga harus berupa angka 0 atau lebih." };
   }
 
+  const stok = parseInt(stokStr, 10);
+  if (isNaN(stok) || stok < 0) {
+    return { error: "Stok harus berupa angka 0 atau lebih." };
+  }
+
+  let harga_diskon = null;
+  if (hargaDiskonStr && hargaDiskonStr.trim() !== "") {
+    harga_diskon = parseInt(hargaDiskonStr, 10);
+    if (isNaN(harga_diskon) || harga_diskon <= 0) {
+      return { error: "Harga diskon harus berupa angka positif." };
+    }
+    if (harga_diskon >= harga) {
+      return { error: "Harga diskon harus lebih kecil dari harga normal." };
+    }
+  }
+
+  // Validasi badge
+  const validBadges = ["baru", "terlaris", ""];
+  if (badge && !validBadges.includes(badge)) {
+    return { error: "Badge tidak valid." };
+  }
+
   if (!kategori) {
     return { error: "Kategori harus diisi." };
   }
@@ -179,6 +232,9 @@ export async function ubahProduk(id, prevState, formData) {
     .update({
       nama,
       harga,
+      harga_diskon,
+      stok,
+      badge: badge || null,
       kategori,
       foto_url: foto_url || null,
       deskripsi: deskripsi || null,
@@ -207,7 +263,7 @@ export async function hapusProduk(id) {
     throw new Error("Anda harus login terlebih dahulu.");
   }
 
-  // Hapus dari database
+  // Hapus dari database (foto akan terhapus otomatis karena ON DELETE CASCADE)
   const { error } = await supabase.from("produk").delete().eq("id", id);
 
   if (error) {
@@ -217,4 +273,71 @@ export async function hapusProduk(id) {
   // Revalidate cache
   revalidatePath("/admin");
   revalidatePath("/");
+}
+
+// US-18: Tambah foto ke galeri produk
+export async function tambahFotoGaleri(productId, url, urutan) {
+  let supabase;
+  try {
+    const auth = await periksaLogin();
+    supabase = auth.supabase;
+  } catch {
+    throw new Error("Anda harus login terlebih dahulu.");
+  }
+
+  const { error } = await supabase.from("product_images").insert({
+    product_id: productId,
+    url,
+    urutan: urutan || 0,
+  });
+
+  if (error) {
+    throw new Error("Gagal menambah foto: " + error.message);
+  }
+
+  revalidatePath("/admin");
+  revalidatePath(`/produk/${productId}`);
+}
+
+// US-18: Hapus foto dari galeri
+export async function hapusFotoGaleri(imageId, productId) {
+  let supabase;
+  try {
+    const auth = await periksaLogin();
+    supabase = auth.supabase;
+  } catch {
+    throw new Error("Anda harus login terlebih dahulu.");
+  }
+
+  const { error } = await supabase.from("product_images").delete().eq("id", imageId);
+
+  if (error) {
+    throw new Error("Gagal menghapus foto: " + error.message);
+  }
+
+  revalidatePath("/admin");
+  revalidatePath(`/produk/${productId}`);
+}
+
+// US-18: Update urutan foto
+export async function updateUrutanFoto(imageId, urutan, productId) {
+  let supabase;
+  try {
+    const auth = await periksaLogin();
+    supabase = auth.supabase;
+  } catch {
+    throw new Error("Anda harus login terlebih dahulu.");
+  }
+
+  const { error } = await supabase
+    .from("product_images")
+    .update({ urutan })
+    .eq("id", imageId);
+
+  if (error) {
+    throw new Error("Gagal mengubah urutan foto: " + error.message);
+  }
+
+  revalidatePath("/admin");
+  revalidatePath(`/produk/${productId}`);
 }

@@ -88,3 +88,74 @@ select
 from kategori k
 cross join lateral unnest(k.daftar) with ordinality as p (nama, ke)
 where not exists (select 1 from public.produk where deskripsi like 'Contoh untuk uji paginasi%');
+
+-- 5. Migrasi US-15 sampai US-20 (fitur lanjutan)
+-- Tambah kolom untuk stok, harga diskon, dan badge
+
+-- US-19: Kolom stok (default 10 agar produk lama tetap tersedia)
+alter table public.produk add column if not exists stok integer not null default 10 check (stok >= 0);
+
+-- US-20: Kolom harga diskon (opsional, harus lebih kecil dari harga normal)
+alter table public.produk add column if not exists harga_diskon integer check (harga_diskon > 0);
+
+-- US-20: Kolom badge (enum: null, 'baru', atau 'terlaris')
+alter table public.produk add column if not exists badge text check (badge in ('baru', 'terlaris'));
+
+-- US-18: Tabel galeri foto produk
+create table if not exists public.product_images (
+  id bigint generated always as identity primary key,
+  product_id bigint not null references public.produk(id) on delete cascade,
+  url text not null,
+  urutan integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- RLS untuk product_images (sama seperti produk: hanya admin authenticated yang bisa akses)
+alter table public.product_images enable row level security;
+
+drop policy if exists "admin_baca_product_images" on public.product_images;
+drop policy if exists "admin_tambah_product_images" on public.product_images;
+drop policy if exists "admin_ubah_product_images" on public.product_images;
+drop policy if exists "admin_hapus_product_images" on public.product_images;
+
+create policy "admin_baca_product_images" on public.product_images
+  for select to authenticated using (true);
+
+create policy "admin_tambah_product_images" on public.product_images
+  for insert to authenticated with check (true);
+
+create policy "admin_ubah_product_images" on public.product_images
+  for update to authenticated using (true) with check (true);
+
+create policy "admin_hapus_product_images" on public.product_images
+  for delete to authenticated using (true);
+
+-- Indeks untuk performa query
+create index if not exists idx_product_images_product_id on public.product_images(product_id);
+create index if not exists idx_produk_kategori on public.produk(kategori);
+create index if not exists idx_produk_harga on public.produk(harga);
+create index if not exists idx_produk_created_at on public.produk(created_at);
+
+-- Migrasi foto lama: masukkan foto_url existing sebagai foto pertama di galeri
+-- Hanya dilakukan sekali untuk produk yang punya foto_url dan belum ada di product_images
+insert into public.product_images (product_id, url, urutan)
+select id, foto_url, 0
+from public.produk
+where foto_url is not null 
+  and foto_url != ''
+  and not exists (
+    select 1 from public.product_images where product_id = produk.id
+  );
+
+-- Update beberapa produk contoh dengan harga diskon dan badge untuk testing
+update public.produk 
+set harga_diskon = 38000, badge = 'terlaris'
+where nama = 'Kopi Bubuk Robusta 250 g';
+
+update public.produk 
+set badge = 'baru'
+where nama in ('Tas Anyaman Pandan', 'Kain Batik Cap 2 m');
+
+update public.produk
+set stok = 0
+where nama = 'Sambal Bawang Botol 150 ml';
