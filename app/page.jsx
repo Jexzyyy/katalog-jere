@@ -1,19 +1,47 @@
 import KartuProduk from "@/components/KartuProduk";
+import FilterProduk from "@/components/FilterProduk";
 import { toko } from "@/lib/toko";
 import { buatClientServer } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
-export default async function HalamanKatalog() {
+export default async function HalamanKatalog({ searchParams }) {
+  const params = await searchParams;
+  const kategori = params?.kategori || "";
+  const cari = params?.cari || "";
+
   let daftarProduk = [];
+  let daftarKategori = [];
   let pesanError = null;
 
   try {
     const supabase = buatClientServer();
-    const { data, error } = await supabase
+
+    // Ambil daftar kategori unik
+    const { data: kategoriData } = await supabase
       .from("produk")
-      .select("*")
-      .order("id", { ascending: true });
+      .select("kategori")
+      .order("kategori");
+
+    if (kategoriData) {
+      const uniqueKategori = [...new Set(kategoriData.map((p) => p.kategori).filter(Boolean))];
+      daftarKategori = uniqueKategori;
+    }
+
+    // Query produk dengan filter
+    let query = supabase.from("produk").select("*");
+
+    if (kategori) {
+      query = query.eq("kategori", kategori);
+    }
+
+    if (cari) {
+      query = query.ilike("nama", `%${cari}%`);
+    }
+
+    query = query.order("created_at", { ascending: false });
+
+    const { data, error } = await query;
 
     if (error) {
       pesanError = error.message;
@@ -23,6 +51,12 @@ export default async function HalamanKatalog() {
   } catch (err) {
     pesanError = err.message || "Gagal mengambil data produk dari server.";
   }
+
+  const judulHasil = kategori
+    ? `Produk kategori ${kategori}`
+    : cari
+      ? `Hasil pencarian "${cari}"`
+      : "Produk kami";
 
   return (
     <>
@@ -34,9 +68,11 @@ export default async function HalamanKatalog() {
         <p className="mt-4 text-sm text-teks-lembut">{toko.jamBuka}</p>
       </section>
 
+      <FilterProduk daftarKategori={daftarKategori} kategoriAktif={kategori} cariAktif={cari} />
+
       <section aria-labelledby="judul-produk" className="flex flex-col gap-5">
         <h2 id="judul-produk" className="text-xl font-bold">
-          Produk kami
+          {judulHasil}
         </h2>
         {pesanError ? (
           <div className="rounded-lg border border-bahaya/20 bg-permukaan p-4 text-sm text-bahaya">
@@ -44,7 +80,11 @@ export default async function HalamanKatalog() {
             <p className="mt-1 text-teks-lembut">{pesanError}</p>
           </div>
         ) : daftarProduk.length === 0 ? (
-          <p className="py-8 text-center text-teks-lembut">Belum ada produk</p>
+          <div className="py-8 text-center">
+            <p className="text-teks-lembut">
+              {kategori || cari ? "Tidak ada produk yang sesuai" : "Belum ada produk"}
+            </p>
+          </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
             {daftarProduk.map((produk) => (

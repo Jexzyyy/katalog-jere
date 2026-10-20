@@ -6,6 +6,20 @@ import { toko } from "@/lib/toko";
 export const metadata = {
   title: toko.nama,
   description: toko.tagline,
+  manifest: "/manifest.webmanifest",
+  themeColor: "#1f6b4f",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: toko.nama,
+  },
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
 };
 
 export default function RootLayout({ children }) {
@@ -18,6 +32,7 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap"
         />
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </head>
       <body className="flex min-h-screen flex-col font-sans antialiased">
         <Header />

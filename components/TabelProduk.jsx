@@ -1,7 +1,27 @@
+"use client";
+
 import { formatRupiah } from "@/lib/format";
 import Tombol from "@/components/Tombol";
+import { hapusProduk } from "@/app/admin/actions";
+import { useState } from "react";
 
 export default function TabelProduk({ daftarProduk }) {
+  const [isDeleting, setIsDeleting] = useState(null);
+
+  const handleHapus = async (id, nama) => {
+    if (!confirm(`Yakin ingin menghapus produk "${nama}"?`)) {
+      return;
+    }
+
+    setIsDeleting(id);
+    try {
+      await hapusProduk(id);
+    } catch (error) {
+      alert(error.message || "Gagal menghapus produk");
+      setIsDeleting(null);
+    }
+  };
+
   return (
     <div className="overflow-x-auto rounded-2xl border border-garis">
       <table className="w-full min-w-[560px] text-left text-sm">
@@ -28,12 +48,16 @@ export default function TabelProduk({ daftarProduk }) {
               <td className="px-4 py-3">{formatRupiah(produk.harga)}</td>
               <td className="px-4 py-3">
                 <div className="flex justify-end gap-2">
-                  {/* US-09 dan US-10 (bonus): ubah dan hapus produk */}
                   <Tombol href={`/admin/produk/${produk.id}/ubah`} varian="garis">
                     Ubah
                   </Tombol>
-                  <Tombol type="button" varian="bahaya">
-                    Hapus
+                  <Tombol
+                    type="button"
+                    varian="bahaya"
+                    onClick={() => handleHapus(produk.id, produk.nama)}
+                    disabled={isDeleting === produk.id}
+                  >
+                    {isDeleting === produk.id ? "Menghapus..." : "Hapus"}
                   </Tombol>
                 </div>
               </td>
